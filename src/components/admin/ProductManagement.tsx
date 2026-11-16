@@ -223,18 +223,18 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5">
                         <span 
-                          className="font-mono text-[11px] font-semibold text-nexora-charcoal bg-nexora-warmWhite px-2.5 py-1 rounded border border-nexora-border select-all"
-                          title={p.id}
+                          className="font-mono text-xs font-bold text-nexora-charcoal bg-nexora-warmWhite px-2.5 py-1 rounded border border-nexora-border select-all min-w-[32px] text-center"
+                          title={`Product #${p.id}`}
                         >
-                          #{p.id.length > 10 ? `${p.id.slice(0, 8)}...` : p.id}
+                          #{p.id}
                         </span>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(p.id);
-                            onNotify('Product ID copied to clipboard', 'success');
+                            navigator.clipboard.writeText(String(p.id));
+                            onNotify(`Product ID #${p.id} copied to clipboard`, 'success');
                           }}
                           className="p-1 text-neutral-400 hover:text-nexora-charcoal hover:bg-nexora-beige rounded transition-colors"
-                          title="Copy Full Product ID"
+                          title="Copy Product ID"
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </button>
@@ -254,20 +254,16 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                             {p.name}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5 text-[10px] text-nexora-muted">
-                            <span className="capitalize">{p.gender === 'unisex' ? 'couples' : p.gender}</span>
                             {p.price > 0 && (
-                              <>
-                                <span>&bull;</span>
-                                <span className="font-semibold text-nexora-charcoal">{formatCurrency(p.price)}</span>
-                              </>
+                              <span className="font-semibold text-nexora-charcoal">{formatCurrency(p.price)}</span>
                             )}
                             {p.active ? (
                               <span className="inline-flex items-center text-emerald-600 font-medium">
-                                &bull; Active
+                                Active
                               </span>
                             ) : (
                               <span className="inline-flex items-center text-neutral-400 font-medium">
-                                &bull; Hidden
+                                Hidden
                               </span>
                             )}
                           </div>

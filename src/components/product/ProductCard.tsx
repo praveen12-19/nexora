@@ -84,9 +84,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Product Information */}
         <div className="p-3 md:p-4 flex-1 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between text-[11px] text-nexora-muted uppercase tracking-wider mb-1">
+            <div className="text-[11px] text-nexora-muted uppercase tracking-wider mb-1">
               <span>{product.category}</span>
-              <span className="capitalize">{product.gender}</span>
             </div>
 
             {/* Product Title (Clicking opens image preview only) */}

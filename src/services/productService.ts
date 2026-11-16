@@ -4,6 +4,18 @@ import { INITIAL_PRODUCTS } from '../data/initialProducts';
 
 const LOCAL_STORAGE_PRODUCTS_KEY = 'nexora_catalog_v2';
 
+// Helper to determine next sequential integer ID starting from 1
+function getNextSequentialId(products: Product[]): string {
+  let maxId = 0;
+  for (const p of products) {
+    const num = parseInt(String(p.id), 10);
+    if (!isNaN(num) && num > maxId) {
+      maxId = num;
+    }
+  }
+  return String(maxId + 1);
+}
+
 // Helper to get local stored products (used as local cache / fallback)
 function getStoredProducts(): Product[] {
   try {
@@ -12,7 +24,29 @@ function getStoredProducts(): Product[] {
 
     const data = localStorage.getItem(LOCAL_STORAGE_PRODUCTS_KEY);
     if (data) {
-      return JSON.parse(data);
+      let products: Product[] = JSON.parse(data);
+      // Auto-migrate any legacy non-numeric UUIDs into sequential IDs starting from 1
+      let hasLegacyId = false;
+      for (const p of products) {
+        if (!/^\d+$/.test(String(p.id))) {
+          hasLegacyId = true;
+          break;
+        }
+      }
+
+      if (hasLegacyId && products.length > 0) {
+        // Sort chronologically ascending to preserve order
+        const sorted = [...products].sort(
+          (a, b) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()
+        );
+        sorted.forEach((p, index) => {
+          p.id = String(index + 1);
+        });
+        saveStoredProducts(sorted);
+        return sorted;
+      }
+
+      return products;
     }
   } catch (err) {
     console.error('Failed to read local products:', err);
@@ -179,9 +213,12 @@ export const productService = {
    * Create a new product.
    */
   async createProduct(productData: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
+    const localList = getStoredProducts();
+    const nextId = getNextSequentialId(localList);
+
     const newProduct: Product = {
       ...productData,
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `prod-${Date.now()}`,
+      id: nextId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -207,6 +244,7 @@ export const productService = {
         } else if (data) {
           return {
             ...data,
+            id: String(data.id),
             images: Array.isArray(data.images) ? data.images : JSON.parse(data.images || '[]'),
           };
         }
@@ -216,7 +254,6 @@ export const productService = {
     }
 
     // Local fallback persistence
-    const localList = getStoredProducts();
     localList.unshift(newProduct);
     saveStoredProducts(localList);
     return newProduct;

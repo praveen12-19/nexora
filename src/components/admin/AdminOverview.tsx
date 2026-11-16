@@ -196,9 +196,6 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
                         <span className="font-medium text-nexora-charcoal block line-clamp-1">
                           {p.name}
                         </span>
-                        <span className="text-[10px] text-nexora-muted capitalize">
-                          {p.gender === 'unisex' ? 'couples' : p.gender}
-                        </span>
                       </div>
                     </div>
                   </td>

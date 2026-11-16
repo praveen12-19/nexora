@@ -120,7 +120,7 @@ export const ProductDetails: React.FC = () => {
           {/* Breadcrumb & Badges */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] uppercase tracking-wider font-semibold text-nexora-muted">
-              {product.category} &bull; <span className="capitalize">{product.gender}</span>
+              {product.category}
             </span>
             {product.trending && <Badge variant="trending">Trending on Reels</Badge>}
             {product.featured && <Badge variant="primary">Curated Pick</Badge>}

@@ -27,7 +27,7 @@ export const Footer: React.FC = () => {
 
             {/* YouTube - Official Brand Red */}
             <a
-              href="https://youtube.com/@nexora-collections?si=SvGpR0-vYHu1TpAt"
+              href="https://www.youtube.com/@nexora-collections"
               target="_blank"
               rel="noopener noreferrer"
               className="w-11 h-11 rounded-full bg-[#FF0000] hover:bg-[#E60000] flex items-center justify-center transition-all duration-300 text-white shadow-lg hover:scale-110 active:scale-95 hover:shadow-red-500/25"
@@ -55,7 +55,7 @@ export const Footer: React.FC = () => {
             Affiliate Disclaimer Statement
           </p>
           <p className="text-[11px] md:text-xs text-white/65">
-            Nexora Collection is a fashion discovery and curation platform. We do not sell products directly, hold inventory, process customer payments, or fulfill orders. When you click &quot;Buy on Meesho&quot;, you are redirected to the Meesho marketplace to complete your transaction with trusted sellers. Nexora Collection participates in the Meesho Affiliate Program and may earn affiliate commissions on qualifying purchases made through our referral links at no extra cost to you.
+            Nexora Collection is a fashion discovery and curation platform. We do not sell products directly, hold inventory, process customer payments, or fulfill orders. When you click &quot;View Product&quot;, you are redirected to the Meesho marketplace to complete your transaction with trusted sellers. Nexora Collection participates in the Meesho Affiliate Program and may earn affiliate commissions on qualifying purchases made through our referral links at no extra cost to you.
           </p>
         </div>
       </div>
