@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Lock, X, AlertCircle, ShieldCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 interface AdminLoginModalProps {
@@ -20,6 +20,19 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // Close on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,8 +40,21 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     await onLogin(username, password);
   };
 
+  const handleClose = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+    >
       {/* Outer ambient glow and container */}
       <div className="relative max-w-md w-full animate-slide-up">
         {/* Soft background aura */}
@@ -39,13 +65,15 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           {/* Subtle top ambient radial highlight */}
           <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Close Button */}
+          {/* Close Button with high z-index and comfortable mobile touch area */}
           <button
-            onClick={onClose}
-            className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-amber-400/40"
+            type="button"
+            onClick={handleClose}
+            onTouchEnd={handleClose}
+            className="absolute top-4 right-4 sm:top-5 sm:right-5 z-30 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/70 hover:text-white active:text-white flex items-center justify-center transition-all duration-200 border border-white/15 hover:border-amber-400/60 shadow-lg cursor-pointer touch-manipulation active:scale-90"
             aria-label="Close modal"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
 
           {/* Brand Emblem & Header */}

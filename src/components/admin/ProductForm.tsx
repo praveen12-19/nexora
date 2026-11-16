@@ -130,8 +130,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-white/70 hover:text-white p-1 rounded-full hover:bg-white/10"
+            className="text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors cursor-pointer touch-manipulation"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -224,15 +225,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               />
               <LinkIcon className="w-4 h-4 text-pink-500 absolute left-3 top-3 pointer-events-none" />
             </div>
-            <p className="text-[11px] text-nexora-muted mt-1">
-              Visitors clicking &quot;Buy on Meesho&quot; will be securely redirected to this exact affiliate link.
-            </p>
           </div>
 
           {/* Product Images (Cloudinary) */}
           <div className="space-y-3">
             <label className="block text-xs font-semibold text-nexora-charcoal uppercase tracking-wider">
-              Product Images (Cloudinary Upload) *
+              Product Images *
             </label>
 
             {/* Upload Buttons */}
@@ -279,7 +277,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               </div>
             ) : (
               <p className="text-xs text-nexora-muted italic">
-                No images added yet. Please upload at least one image.
+
               </p>
             )}
           </div>

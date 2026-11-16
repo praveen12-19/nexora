@@ -53,29 +53,31 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="bg-white p-6 rounded-2xl border border-nexora-border/70 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white p-4 sm:p-6 rounded-2xl border border-nexora-border/70 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold text-nexora-charcoal">
+          <h2 className="font-serif text-xl sm:text-2xl font-bold text-nexora-charcoal">
             Nexora Admin Hub
           </h2>
-          <p className="text-xs text-nexora-muted mt-1">
+          <p className="text-xs text-nexora-muted mt-1 leading-relaxed">
             Real-time management for catalog discovery, Meesho affiliate links, and traffic analytics.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
           <button
+            type="button"
             onClick={onOpenAddProduct}
-            className="flex items-center gap-2 px-4 py-2.5 bg-nexora-primary hover:bg-black text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 bg-nexora-primary hover:bg-black text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer touch-manipulation"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Add New Product</span>
+            <PlusCircle className="w-4 h-4 shrink-0" />
+            <span>Add Product</span>
           </button>
           <button
+            type="button"
             onClick={onNavigateToProducts}
-            className="flex items-center gap-2 px-4 py-2.5 bg-nexora-warmWhite hover:bg-nexora-beige text-nexora-charcoal text-xs font-bold uppercase tracking-wider rounded-lg border border-nexora-border transition-all"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 bg-nexora-warmWhite hover:bg-nexora-beige text-nexora-charcoal text-xs font-bold uppercase tracking-wider rounded-lg border border-nexora-border transition-all cursor-pointer touch-manipulation"
           >
-            <ShoppingBag className="w-4 h-4" />
-            <span>Manage Products</span>
+            <ShoppingBag className="w-4 h-4 shrink-0" />
+            <span>Manage Catalog</span>
           </button>
         </div>
       </div>
@@ -173,7 +175,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left text-xs">
             <thead className="bg-nexora-warmWhite text-nexora-muted uppercase tracking-wider text-[10px] border-b border-nexora-border">
               <tr>

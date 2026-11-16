@@ -20,23 +20,29 @@
   }
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+/* Clean Scroll: Hide scrollbar track & grab handles globally while preserving full scrolling */
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE & Edge */
 }
 
-::-webkit-scrollbar-track {
-  background: #F4F1EA;
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #C4BCB3;
-  border-radius: 4px;
+html,
+body {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #8F877E;
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* Luxury Editorial Image Hover Zoom */
@@ -65,4 +71,20 @@
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Hide scrollbars completely while preserving full scrolling */
+.no-scrollbar::-webkit-scrollbar,
+[data-admin-dashboard] *::-webkit-scrollbar,
+[data-admin-dashboard]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar,
+[data-admin-dashboard],
+[data-admin-dashboard] * {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
 }
