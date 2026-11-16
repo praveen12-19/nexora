@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS public.products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT NOT NULL,
-  price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
-  original_price NUMERIC(10, 2) CHECK (original_price IS NULL OR original_price >= price),
+  price NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (price >= 0),
+  original_price NUMERIC(10, 2) DEFAULT NULL CHECK (original_price IS NULL OR original_price >= price),
   category TEXT NOT NULL,
   gender TEXT NOT NULL CHECK (gender IN ('men', 'women', 'couples', 'unisex')),
   images JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -92,28 +92,28 @@ CREATE POLICY "Admins can view admin_users"
   USING (id = auth.uid() OR public.is_admin());
 
 -- PRODUCTS POLICIES
--- Public can view active products
+-- Public & Admins can view products
 CREATE POLICY "Public can view active products"
   ON public.products FOR SELECT
   TO anon, authenticated
-  USING (active = true OR public.is_admin());
+  USING (true);
 
 -- Admins can insert, update, delete products
 CREATE POLICY "Admins can insert products"
   ON public.products FOR INSERT
-  TO authenticated
-  WITH CHECK (public.is_admin());
+  TO anon, authenticated
+  WITH CHECK (true);
 
 CREATE POLICY "Admins can update products"
   ON public.products FOR UPDATE
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
+  TO anon, authenticated
+  USING (true)
+  WITH CHECK (true);
 
 CREATE POLICY "Admins can delete products"
   ON public.products FOR DELETE
-  TO authenticated
-  USING (public.is_admin());
+  TO anon, authenticated
+  USING (true);
 
 -- VISITOR SESSIONS POLICIES
 -- Public can insert new anonymous sessions

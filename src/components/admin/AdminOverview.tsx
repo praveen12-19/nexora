@@ -13,7 +13,6 @@ import { Product } from '../../types/product';
 import { AnalyticsSummary } from '../../types/analytics';
 import { productService } from '../../services/productService';
 import { analyticsService } from '../../services/analyticsService';
-import { formatCurrency } from '../../utils/currency';
 
 interface AdminOverviewProps {
   onNavigateToProducts: () => void;
@@ -82,7 +81,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
       </div>
 
       {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 md:gap-4">
         {/* Total Products */}
         <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
           <div className="flex items-center justify-between text-nexora-muted mb-2">
@@ -152,20 +151,6 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
             Product detail hits
           </div>
         </div>
-
-        {/* Affiliate Clicks */}
-        <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-pink-600 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-nexora-muted">Meesho Clicks</span>
-            <ExternalLink className="w-4 h-4" />
-          </div>
-          <div className="text-2xl font-bold text-pink-600">
-            {isLoading ? '...' : summary?.totalAffiliateClicks ?? 0}
-          </div>
-          <div className="text-[10px] text-pink-600/80 mt-1">
-            Outbound redirects
-          </div>
-        </div>
       </div>
 
       {/* Recent Catalog Preview Table */}
@@ -176,7 +161,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
               Recent Products In Catalog
             </h3>
             <p className="text-xs text-nexora-muted">
-              Recently added fashion pieces and active status.
+              Recently added fashion pieces.
             </p>
           </div>
           <button
@@ -194,8 +179,6 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
               <tr>
                 <th className="py-3 px-4">Product</th>
                 <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4">Price</th>
-                <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Meesho Link</th>
               </tr>
             </thead>
@@ -214,27 +197,13 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
                           {p.name}
                         </span>
                         <span className="text-[10px] text-nexora-muted capitalize">
-                          {p.gender}
+                          {p.gender === 'unisex' ? 'couples' : p.gender}
                         </span>
                       </div>
                     </div>
                   </td>
                   <td className="py-3 px-4 text-nexora-charcoal font-medium">
                     {p.category}
-                  </td>
-                  <td className="py-3 px-4 font-bold text-nexora-charcoal">
-                    {formatCurrency(p.price)}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
-                        p.active
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-neutral-100 text-neutral-600 border border-neutral-300'
-                      }`}
-                    >
-                      {p.active ? 'Active' : 'Inactive'}
-                    </span>
                   </td>
                   <td className="py-3 px-4">
                     <a

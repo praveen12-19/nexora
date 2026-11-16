@@ -12,7 +12,6 @@ import {
 import { Product, Gender } from '../types/product';
 import { productService } from '../services/productService';
 import { ProductGrid } from '../components/product/ProductGrid';
-import { useWishlist } from '../hooks/useWishlist';
 
 const CATEGORIES = [
   'All',
@@ -40,8 +39,6 @@ export const Shop: React.FC<ShopProps> = ({ defaultGender }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-
-  const { wishlist, toggleWishlist } = useWishlist();
 
   // Automatic redirect if accessed via query string to keep URL clean and active links accurate
   useEffect(() => {
@@ -131,7 +128,6 @@ export const Shop: React.FC<ShopProps> = ({ defaultGender }) => {
     setSearchParams(new URLSearchParams());
   };
 
-  const wishlistIds = new Set(wishlist.map((p) => p.id));
   const hasActiveFilters = Boolean(
     searchQuery ||
     (selectedCategory && selectedCategory !== 'All') ||
@@ -329,8 +325,6 @@ export const Shop: React.FC<ShopProps> = ({ defaultGender }) => {
           <ProductGrid
             products={products}
             isLoading={isLoading}
-            wishlistIds={wishlistIds}
-            onToggleWishlist={toggleWishlist}
             emptyMessage={
               selectedGender === 'men'
                 ? "No products added in Men's Fashion yet. New festival & event pieces will appear here once added by the admin."

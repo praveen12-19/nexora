@@ -6,7 +6,6 @@ import { Shop } from '../pages/Shop';
 import { FashionDepartment } from '../pages/FashionDepartment';
 import { Collections } from '../pages/Collections';
 import { ProductDetails } from '../pages/ProductDetails';
-import { Wishlist } from '../pages/Wishlist';
 import { About } from '../pages/About';
 import { Contact } from '../pages/Contact';
 
@@ -20,7 +19,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="/women" element={<FashionDepartment gender="women" />} />
         <Route path="/collections" element={<Collections />} />
         <Route path="/product/:id" element={<ProductDetails />} />
-        <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/wishlist" element={<Navigate to="/shop" replace />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         {/* Fallback route */}

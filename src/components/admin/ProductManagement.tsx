@@ -255,8 +255,12 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                           </span>
                           <div className="flex items-center gap-2 mt-0.5 text-[10px] text-nexora-muted">
                             <span className="capitalize">{p.gender === 'unisex' ? 'couples' : p.gender}</span>
-                            <span>&bull;</span>
-                            <span className="font-semibold text-nexora-charcoal">{formatCurrency(p.price)}</span>
+                            {p.price > 0 && (
+                              <>
+                                <span>&bull;</span>
+                                <span className="font-semibold text-nexora-charcoal">{formatCurrency(p.price)}</span>
+                              </>
+                            )}
                             {p.active ? (
                               <span className="inline-flex items-center text-emerald-600 font-medium">
                                 &bull; Active

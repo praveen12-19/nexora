@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Product } from '../types/product';
 import { productService } from '../services/productService';
 import { ProductCard } from '../components/product/ProductCard';
-import { useWishlist } from '../hooks/useWishlist';
 
 export const Collections: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { wishlist, toggleWishlist } = useWishlist();
 
   useEffect(() => {
     async function loadCouplesProducts() {
@@ -33,8 +31,6 @@ export const Collections: React.FC = () => {
     loadCouplesProducts();
   }, []);
 
-  const wishlistIds = new Set(wishlist.map((p) => p.id));
-
   // If loading or no products yet, keep it completely clean and empty as requested
   if (isLoading || products.length === 0) {
     return <div className="min-h-[70vh]" />;
@@ -47,8 +43,6 @@ export const Collections: React.FC = () => {
           <ProductCard
             key={p.id}
             product={p}
-            isInWishlist={wishlistIds.has(p.id)}
-            onToggleWishlist={toggleWishlist}
           />
         ))}
       </div>

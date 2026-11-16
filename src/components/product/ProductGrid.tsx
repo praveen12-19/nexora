@@ -7,16 +7,12 @@ import { ShoppingBag } from 'lucide-react';
 interface ProductGridProps {
   products: Product[];
   isLoading?: boolean;
-  wishlistIds?: Set<string>;
-  onToggleWishlist?: (product: Product) => void;
   emptyMessage?: string;
 }
 
 export const ProductGrid: React.FC<ProductGridProps> = ({
   products,
   isLoading = false,
-  wishlistIds = new Set(),
-  onToggleWishlist,
   emptyMessage = 'No products match your current filters.',
 }) => {
   if (isLoading) {
@@ -45,8 +41,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
         <ProductCard
           key={product.id}
           product={product}
-          isInWishlist={wishlistIds.has(product.id)}
-          onToggleWishlist={onToggleWishlist}
         />
       ))}
     </div>

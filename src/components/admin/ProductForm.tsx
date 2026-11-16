@@ -37,19 +37,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const [name, setName] = useState(product?.name || '');
   const [description, setDescription] = useState(product?.description || '');
-  const [price, setPrice] = useState(product?.price ? product.price.toString() : '');
-  const [originalPrice, setOriginalPrice] = useState(
-    product?.original_price ? product.original_price.toString() : ''
-  );
   const [category, setCategory] = useState(product?.category || 'Shirts');
   const [gender, setGender] = useState<Gender>(
     product?.gender === 'unisex' ? 'couples' : product?.gender || 'women'
   );
   const [images, setImages] = useState<string[]>(product?.images || []);
   const [affiliateUrl, setAffiliateUrl] = useState(product?.affiliate_url || '');
-  const [featured, setFeatured] = useState(product?.featured ?? false);
-  const [trending, setTrending] = useState(product?.trending ?? false);
-  const [active, setActive] = useState(product?.active ?? true);
 
   const [uploadingImage, setUploadingImage] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -88,18 +81,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       return;
     }
 
-    const parsedPrice = parseFloat(price);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      setValidationError('Please enter a valid product price.');
-      return;
-    }
-
-    const parsedOriginalPrice = originalPrice ? parseFloat(originalPrice) : null;
-    if (parsedOriginalPrice !== null && (isNaN(parsedOriginalPrice) || parsedOriginalPrice < parsedPrice)) {
-      setValidationError('Original price must be greater than or equal to current price.');
-      return;
-    }
-
     if (!category.trim()) {
       setValidationError('Category is required.');
       return;
@@ -119,15 +100,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       await onSave({
         name: name.trim(),
         description: description.trim(),
-        price: parsedPrice,
-        original_price: parsedOriginalPrice,
+        price: product?.price ?? 0,
+        original_price: product?.original_price ?? null,
         category,
         gender,
         images,
         affiliate_url: affiliateUrl.trim(),
-        featured,
-        trending,
-        active,
+        featured: product?.featured ?? false,
+        trending: product?.trending ?? false,
+        active: product?.active ?? true,
       });
       onClose();
     } catch (err: any) {
@@ -192,37 +173,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               required
               className="w-full px-3.5 py-2.5 bg-nexora-warmWhite border border-nexora-border rounded-lg text-sm focus:outline-none focus:border-nexora-primary focus:bg-white"
             />
-          </div>
-
-          {/* Price & Original Price */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-nexora-charcoal uppercase tracking-wider mb-1.5">
-                Current Price (₹) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 bg-nexora-warmWhite border border-nexora-border rounded-lg text-sm focus:outline-none focus:border-nexora-primary focus:bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-nexora-charcoal uppercase tracking-wider mb-1.5">
-                Original Price (₹ MRP, optional)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={originalPrice}
-                onChange={(e) => setOriginalPrice(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-nexora-warmWhite border border-nexora-border rounded-lg text-sm focus:outline-none focus:border-nexora-primary focus:bg-white"
-              />
-            </div>
           </div>
 
           {/* Category & Gender */}
@@ -332,45 +282,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 No images added yet. Please upload at least one image.
               </p>
             )}
-          </div>
-
-          {/* Flags: Featured, Trending, Active */}
-          <div className="p-4 bg-nexora-warmWhite rounded-xl border border-nexora-border/70 space-y-3">
-            <span className="text-xs font-semibold text-nexora-charcoal uppercase tracking-wider block">
-              Display &amp; Visibility Controls
-            </span>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-nexora-charcoal">
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(e) => setActive(e.target.checked)}
-                  className="rounded text-nexora-primary focus:ring-0"
-                />
-                <span>Active (Live on store)</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-nexora-charcoal">
-                <input
-                  type="checkbox"
-                  checked={featured}
-                  onChange={(e) => setFeatured(e.target.checked)}
-                  className="rounded text-nexora-primary focus:ring-0"
-                />
-                <span>Featured Collection</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-nexora-charcoal">
-                <input
-                  type="checkbox"
-                  checked={trending}
-                  onChange={(e) => setTrending(e.target.checked)}
-                  className="rounded text-nexora-primary focus:ring-0"
-                />
-                <span>Trending Badge</span>
-              </label>
-            </div>
           </div>
 
           {/* Footer Submit */}

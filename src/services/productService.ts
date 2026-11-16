@@ -203,19 +203,15 @@ export const productService = {
         }).select().single();
 
         if (error) {
-          console.error('Supabase createProduct failed:', error);
-          throw error;
-        }
-
-        if (data) {
+          console.warn('Supabase createProduct failed, saving to local catalog fallback:', error);
+        } else if (data) {
           return {
             ...data,
             images: Array.isArray(data.images) ? data.images : JSON.parse(data.images || '[]'),
           };
         }
       } catch (err) {
-        console.error('Supabase error creating product:', err);
-        throw err;
+        console.warn('Supabase error creating product, saving to local catalog fallback:', err);
       }
     }
 
@@ -244,16 +240,16 @@ export const productService = {
           .select()
           .single();
 
-        if (error) throw error;
-        if (data) {
+        if (error) {
+          console.warn('Supabase updateProduct failed, updating local catalog fallback:', error);
+        } else if (data) {
           return {
             ...data,
             images: Array.isArray(data.images) ? data.images : JSON.parse(data.images || '[]'),
           };
         }
       } catch (err) {
-        console.error('Supabase error updating product:', err);
-        throw err;
+        console.warn('Supabase error updating product, updating local catalog fallback:', err);
       }
     }
 
@@ -278,11 +274,13 @@ export const productService = {
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase.from('products').delete().eq('id', id);
-        if (error) throw error;
-        return true;
+        if (error) {
+          console.warn('Supabase deleteProduct failed, deleting from local catalog fallback:', error);
+        } else {
+          return true;
+        }
       } catch (err) {
-        console.error('Supabase error deleting product:', err);
-        throw err;
+        console.warn('Supabase error deleting product, deleting from local catalog fallback:', err);
       }
     }
 

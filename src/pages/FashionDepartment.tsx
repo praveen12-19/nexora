@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Product } from '../types/product';
 import { productService } from '../services/productService';
 import { ProductCard } from '../components/product/ProductCard';
-import { useWishlist } from '../hooks/useWishlist';
 
 interface FashionDepartmentProps {
   gender: 'men' | 'women';
@@ -11,7 +10,6 @@ interface FashionDepartmentProps {
 export const FashionDepartment: React.FC<FashionDepartmentProps> = ({ gender }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { wishlist, toggleWishlist } = useWishlist();
 
   useEffect(() => {
     async function loadProducts() {
@@ -29,8 +27,6 @@ export const FashionDepartment: React.FC<FashionDepartmentProps> = ({ gender }) 
     loadProducts();
   }, [gender]);
 
-  const wishlistIds = new Set(wishlist.map((p) => p.id));
-
   // If loading or no products yet, leave the page completely empty as requested
   if (isLoading || products.length === 0) {
     return <div className="min-h-[70vh]" />;
@@ -44,8 +40,6 @@ export const FashionDepartment: React.FC<FashionDepartmentProps> = ({ gender }) 
           <ProductCard
             key={product.id}
             product={product}
-            isInWishlist={wishlistIds.has(product.id)}
-            onToggleWishlist={toggleWishlist}
           />
         ))}
       </div>
