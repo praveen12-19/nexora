@@ -1,0 +1,211 @@
+-- ==============================================================================
+-- NEXORA COLLECTION: Database Schema & Row Level Security
+-- ==============================================================================
+
+-- 1. ADMIN USERS TABLE
+CREATE TABLE IF NOT EXISTS public.admin_users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'superadmin')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 2. PRODUCTS TABLE
+CREATE TABLE IF NOT EXISTS public.products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
+  original_price NUMERIC(10, 2) CHECK (original_price IS NULL OR original_price >= price),
+  category TEXT NOT NULL,
+  gender TEXT NOT NULL CHECK (gender IN ('men', 'women', 'couples', 'unisex')),
+  images JSONB NOT NULL DEFAULT '[]'::jsonb,
+  affiliate_url TEXT NOT NULL,
+  featured BOOLEAN NOT NULL DEFAULT false,
+  trending BOOLEAN NOT NULL DEFAULT false,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 3. VISITOR SESSIONS TABLE
+CREATE TABLE IF NOT EXISTS public.visitor_sessions (
+  id TEXT PRIMARY KEY,
+  visitor_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  last_activity_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 4. ANALYTICS EVENTS TABLE
+CREATE TABLE IF NOT EXISTS public.analytics_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitor_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL CHECK (event_type IN ('page_view', 'product_view', 'product_click', 'affiliate_click')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- ==============================================================================
+-- INDEXES FOR HIGH-PERFORMANCE QUERIES
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
+CREATE INDEX IF NOT EXISTS idx_products_gender ON public.products(gender);
+CREATE INDEX IF NOT EXISTS idx_products_active ON public.products(active);
+CREATE INDEX IF NOT EXISTS idx_products_featured ON public.products(featured);
+CREATE INDEX IF NOT EXISTS idx_products_trending ON public.products(trending);
+CREATE INDEX IF NOT EXISTS idx_products_created_at ON public.products(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_visitor_sessions_visitor_id ON public.visitor_sessions(visitor_id);
+CREATE INDEX IF NOT EXISTS idx_visitor_sessions_created_at ON public.visitor_sessions(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_events_visitor_id ON public.analytics_events(visitor_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_session_id ON public.analytics_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_product_id ON public.analytics_events(product_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_event_type ON public.analytics_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON public.analytics_events(created_at DESC);
+
+-- ==============================================================================
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- ==============================================================================
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.visitor_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
+
+-- Helper function to check if caller is an admin
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.admin_users
+    WHERE id = auth.uid()
+  );
+$$;
+
+-- ADMIN USERS POLICIES
+CREATE POLICY "Admins can view admin_users"
+  ON public.admin_users FOR SELECT
+  TO authenticated
+  USING (id = auth.uid() OR public.is_admin());
+
+-- PRODUCTS POLICIES
+-- Public can view active products
+CREATE POLICY "Public can view active products"
+  ON public.products FOR SELECT
+  TO anon, authenticated
+  USING (active = true OR public.is_admin());
+
+-- Admins can insert, update, delete products
+CREATE POLICY "Admins can insert products"
+  ON public.products FOR INSERT
+  TO authenticated
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "Admins can update products"
+  ON public.products FOR UPDATE
+  TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "Admins can delete products"
+  ON public.products FOR DELETE
+  TO authenticated
+  USING (public.is_admin());
+
+-- VISITOR SESSIONS POLICIES
+-- Public can insert new anonymous sessions
+CREATE POLICY "Public can insert sessions"
+  ON public.visitor_sessions FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (true);
+
+-- Only admins can read sessions
+CREATE POLICY "Admins can select sessions"
+  ON public.visitor_sessions FOR SELECT
+  TO authenticated
+  USING (public.is_admin());
+
+-- ANALYTICS EVENTS POLICIES
+-- Public can record events
+CREATE POLICY "Public can record analytics events"
+  ON public.analytics_events FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (true);
+
+-- Only admins can view analytics events
+CREATE POLICY "Admins can view analytics events"
+  ON public.analytics_events FOR SELECT
+  TO authenticated
+  USING (public.is_admin());
+
+-- ==============================================================================
+-- DATABASE AGGREGATION FUNCTIONS
+-- ==============================================================================
+
+-- 1. Analytics Summary
+CREATE OR REPLACE FUNCTION public.get_analytics_summary(
+  p_start_time TIMESTAMPTZ DEFAULT '-infinity'::TIMESTAMPTZ,
+  p_end_time TIMESTAMPTZ DEFAULT 'infinity'::TIMESTAMPTZ
+)
+RETURNS TABLE (
+  total_visits BIGINT,
+  unique_visitors BIGINT,
+  total_product_views BIGINT,
+  total_product_clicks BIGINT,
+  total_affiliate_clicks BIGINT
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT
+    (SELECT COUNT(DISTINCT session_id) FROM public.analytics_events WHERE created_at >= p_start_time AND created_at <= p_end_time) AS total_visits,
+    (SELECT COUNT(DISTINCT visitor_id) FROM public.analytics_events WHERE created_at >= p_start_time AND created_at <= p_end_time) AS unique_visitors,
+    (SELECT COUNT(*) FROM public.analytics_events WHERE event_type = 'product_view' AND created_at >= p_start_time AND created_at <= p_end_time) AS total_product_views,
+    (SELECT COUNT(*) FROM public.analytics_events WHERE event_type = 'product_click' AND created_at >= p_start_time AND created_at <= p_end_time) AS total_product_clicks,
+    (SELECT COUNT(*) FROM public.analytics_events WHERE event_type = 'affiliate_click' AND created_at >= p_start_time AND created_at <= p_end_time) AS total_affiliate_clicks;
+$$;
+
+-- 2. Product Performance Aggregation
+CREATE OR REPLACE FUNCTION public.get_product_performance(
+  p_start_time TIMESTAMPTZ DEFAULT '-infinity'::TIMESTAMPTZ,
+  p_end_time TIMESTAMPTZ DEFAULT 'infinity'::TIMESTAMPTZ
+)
+RETURNS TABLE (
+  product_id UUID,
+  product_name TEXT,
+  category TEXT,
+  gender TEXT,
+  price NUMERIC,
+  images JSONB,
+  total_views BIGINT,
+  unique_visitors BIGINT,
+  product_clicks BIGINT,
+  affiliate_clicks BIGINT
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT
+    p.id AS product_id,
+    p.name AS product_name,
+    p.category,
+    p.gender,
+    p.price,
+    p.images,
+    COUNT(*) FILTER (WHERE e.event_type = 'product_view') AS total_views,
+    COUNT(DISTINCT e.visitor_id) FILTER (WHERE e.event_type = 'product_view') AS unique_visitors,
+    COUNT(*) FILTER (WHERE e.event_type = 'product_click') AS product_clicks,
+    COUNT(*) FILTER (WHERE e.event_type = 'affiliate_click') AS affiliate_clicks
+  FROM public.products p
+  LEFT JOIN public.analytics_events e 
+    ON p.id = e.product_id 
+    AND e.created_at >= p_start_time 
+    AND e.created_at <= p_end_time
+  GROUP BY p.id, p.name, p.category, p.gender, p.price, p.images
+  ORDER BY affiliate_clicks DESC, total_views DESC;
+$$;

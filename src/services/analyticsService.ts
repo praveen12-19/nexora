@@ -1,0 +1,326 @@
+import { supabase, isSupabaseConfigured } from './supabase';
+import { 
+  AnalyticsEvent, 
+  AnalyticsEventType, 
+  AnalyticsSummary, 
+  ProductPerformance, 
+  AnalyticsDateFilter 
+} from '../types/analytics';
+import { getVisitorId } from '../utils/visitorId';
+import { getOrCreateSession, updateSessionActivity } from '../utils/sessionTracking';
+import { INITIAL_PRODUCTS } from '../data/initialProducts';
+
+const LOCAL_ANALYTICS_EVENTS_KEY = 'nexora_analytics_events';
+const ADMIN_SESSION_KEY = 'nexora_admin_user';
+
+// Check if currently acting as admin to exclude from analytics
+function isAdminActive(): boolean {
+  try {
+    return Boolean(localStorage.getItem(ADMIN_SESSION_KEY));
+  } catch (err) {
+    return false;
+  }
+}
+
+function getStoredEvents(): AnalyticsEvent[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ANALYTICS_EVENTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (err) {
+    console.error('Failed to read local events:', err);
+  }
+  return [];
+}
+
+function saveStoredEvents(events: AnalyticsEvent[]): void {
+  try {
+    // Keep last 10,000 events locally to avoid storage limits
+    const trimmed = events.slice(-10000);
+    localStorage.setItem(LOCAL_ANALYTICS_EVENTS_KEY, JSON.stringify(trimmed));
+  } catch (err) {
+    console.error('Failed to save local events:', err);
+  }
+}
+
+function getFilterDate(filter: AnalyticsDateFilter): Date {
+  const now = new Date();
+  switch (filter) {
+    case 'today':
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case '7days':
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30days':
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case 'all':
+    default:
+      return new Date(0);
+  }
+}
+
+export const analyticsService = {
+  /**
+   * Track an analytics event.
+   * Silently ignores tracking if the user is currently an admin.
+   */
+  async trackEvent(eventType: AnalyticsEventType, productId?: string | null): Promise<void> {
+    if (isAdminActive()) {
+      // Exclude admin activity as required by specification Section 9.F
+      return;
+    }
+
+    const visitorId = getVisitorId();
+    const { sessionId } = getOrCreateSession();
+    updateSessionActivity();
+
+    const event: AnalyticsEvent = {
+      visitor_id: visitorId,
+      session_id: sessionId,
+      product_id: productId || null,
+      event_type: eventType,
+      created_at: new Date().toISOString(),
+    };
+
+    // 1. Send to Supabase Edge Function or Table if configured
+    if (isSupabaseConfigured()) {
+      try {
+        // Try Edge Function first
+        const { error } = await supabase.functions.invoke('track-event', {
+          body: event,
+        });
+
+        if (!error) return;
+
+        // Fallback: direct table insert with anon key
+        await supabase.from('analytics_events').insert({
+          visitor_id: visitorId,
+          session_id: sessionId,
+          product_id: productId || null,
+          event_type: eventType,
+        });
+        return;
+      } catch (err) {
+        // Edge function or database insertion failed, store locally
+        console.warn('Analytics network log failed, logging locally:', err);
+      }
+    }
+
+    // 2. Local fallback storage
+    const list = getStoredEvents();
+    list.push(event);
+    saveStoredEvents(list);
+  },
+
+  /**
+   * Get aggregated summary for the Admin Analytics Dashboard.
+   */
+  async getSummary(filter: AnalyticsDateFilter = 'all'): Promise<AnalyticsSummary> {
+    const filterStartDate = getFilterDate(filter).toISOString();
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.rpc('get_analytics_summary', {
+          p_start_time: filterStartDate,
+          p_end_time: new Date().toISOString(),
+        });
+
+        if (!error && data && data.length > 0) {
+          const row = data[0];
+          const totalVisits = Number(row.total_visits || 0);
+          const uniqueVisitors = Number(row.unique_visitors || 0);
+          const totalProductViews = Number(row.total_product_views || 0);
+          const totalProductClicks = Number(row.total_product_clicks || 0);
+          const totalAffiliateClicks = Number(row.total_affiliate_clicks || 0);
+          const clickThroughRate = totalProductViews > 0 
+            ? Math.round((totalAffiliateClicks / totalProductViews) * 1000) / 10 
+            : 0;
+
+          return {
+            totalVisits,
+            uniqueVisitors,
+            totalProductViews,
+            totalProductClicks,
+            totalAffiliateClicks,
+            clickThroughRate,
+          };
+        }
+      } catch (err) {
+        console.warn('Supabase summary RPC failed, computing from local:', err);
+      }
+    }
+
+    // Local computation
+    const events = getStoredEvents();
+    const filterTime = getFilterDate(filter).getTime();
+    const filteredEvents = events.filter((e) => new Date(e.created_at || '').getTime() >= filterTime);
+
+    const uniqueVisitorSet = new Set<string>();
+    const uniqueSessionSet = new Set<string>();
+    let totalProductViews = 0;
+    let totalProductClicks = 0;
+    let totalAffiliateClicks = 0;
+
+    for (const e of filteredEvents) {
+      if (e.visitor_id) uniqueVisitorSet.add(e.visitor_id);
+      if (e.session_id) uniqueSessionSet.add(e.session_id);
+
+      if (e.event_type === 'product_view') totalProductViews++;
+      if (e.event_type === 'product_click') totalProductClicks++;
+      if (e.event_type === 'affiliate_click') totalAffiliateClicks++;
+    }
+
+    const clickThroughRate = totalProductViews > 0 
+      ? Math.round((totalAffiliateClicks / totalProductViews) * 1000) / 10 
+      : 0;
+
+    return {
+      totalVisits: uniqueSessionSet.size,
+      uniqueVisitors: uniqueVisitorSet.size,
+      totalProductViews,
+      totalProductClicks,
+      totalAffiliateClicks,
+      clickThroughRate,
+    };
+  },
+
+  /**
+   * Get product performance table data.
+   */
+  async getProductPerformance(filter: AnalyticsDateFilter = 'all'): Promise<ProductPerformance[]> {
+    const filterStartDate = getFilterDate(filter).toISOString();
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.rpc('get_product_performance', {
+          p_start_time: filterStartDate,
+          p_end_time: new Date().toISOString(),
+        });
+
+        if (!error && data) {
+          return data.map((item: any) => {
+            const views = Number(item.total_views || 0);
+            const affClicks = Number(item.affiliate_clicks || 0);
+            const conversionRate = views > 0 ? Math.round((affClicks / views) * 1000) / 10 : 0;
+            const images = Array.isArray(item.images) ? item.images : JSON.parse(item.images || '[]');
+
+            return {
+              productId: item.product_id,
+              productName: item.product_name,
+              category: item.category,
+              gender: item.gender,
+              price: Number(item.price),
+              imageUrl: images[0] || '',
+              totalViews: views,
+              uniqueVisitors: Number(item.unique_visitors || 0),
+              productClicks: Number(item.product_clicks || 0),
+              affiliateClicks: affClicks,
+              conversionRate,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase product performance RPC failed, computing local:', err);
+      }
+    }
+
+    // Local computation
+    const events = getStoredEvents();
+    const filterTime = getFilterDate(filter).getTime();
+    const filteredEvents = events.filter((e) => new Date(e.created_at || '').getTime() >= filterTime);
+
+    // Get current products
+    const rawProducts = localStorage.getItem('nexora_local_products');
+    const products = rawProducts ? JSON.parse(rawProducts) : INITIAL_PRODUCTS;
+
+    const performanceMap = new Map<string, {
+      totalViews: number;
+      visitors: Set<string>;
+      productClicks: number;
+      affiliateClicks: number;
+    }>();
+
+    for (const p of products) {
+      performanceMap.set(p.id, {
+        totalViews: 0,
+        visitors: new Set(),
+        productClicks: 0,
+        affiliateClicks: 0,
+      });
+    }
+
+    for (const e of filteredEvents) {
+      if (!e.product_id || !performanceMap.has(e.product_id)) continue;
+      const stats = performanceMap.get(e.product_id)!;
+
+      if (e.event_type === 'product_view') {
+        stats.totalViews++;
+        stats.visitors.add(e.visitor_id);
+      } else if (e.event_type === 'product_click') {
+        stats.productClicks++;
+      } else if (e.event_type === 'affiliate_click') {
+        stats.affiliateClicks++;
+      }
+    }
+
+    const result: ProductPerformance[] = [];
+    for (const p of products) {
+      const stats = performanceMap.get(p.id)!;
+      const conversionRate = stats.totalViews > 0 
+        ? Math.round((stats.affiliateClicks / stats.totalViews) * 1000) / 10 
+        : 0;
+
+      result.push({
+        productId: p.id,
+        productName: p.name,
+        category: p.category,
+        gender: p.gender,
+        price: p.price,
+        imageUrl: p.images[0] || '',
+        totalViews: stats.totalViews,
+        uniqueVisitors: stats.visitors.size,
+        productClicks: stats.productClicks,
+        affiliateClicks: stats.affiliateClicks,
+        conversionRate,
+      });
+    }
+
+    result.sort((a, b) => b.affiliateClicks - a.affiliateClicks || b.totalViews - a.totalViews);
+    return result;
+  },
+
+  /**
+   * Get affiliate click counts keyed by product ID: { [productId: string]: number }
+   */
+  async getAffiliateClickCounts(): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+
+    // 1. If Supabase is configured, attempt direct query
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('analytics_events')
+          .select('product_id')
+          .eq('event_type', 'affiliate_click');
+
+        if (!error && Array.isArray(data)) {
+          for (const row of data) {
+            if (row.product_id) {
+              counts[row.product_id] = (counts[row.product_id] || 0) + 1;
+            }
+          }
+          return counts;
+        }
+      } catch (err) {
+        console.warn('Supabase affiliate click counts query failed, using local fallback:', err);
+      }
+    }
+
+    // 2. Local fallback from stored events
+    const events = getStoredEvents();
+    for (const e of events) {
+      if (e.product_id && e.event_type === 'affiliate_click') {
+        counts[e.product_id] = (counts[e.product_id] || 0) + 1;
+      }
+    }
+    return counts;
+  },
+};
