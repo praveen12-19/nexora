@@ -9,7 +9,8 @@ import {
   Copy,
   MousePointerClick,
   ExternalLink,
-  ShoppingBag
+  ShoppingBag,
+  CloudUpload
 } from 'lucide-react';
 import { Product } from '../../types/product';
 import { productService } from '../../services/productService';
@@ -41,9 +42,27 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
   // Delete confirmation
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
+  // Helper to get clean sequential display ID starting from 1
+  const getProductDisplayId = (product: Product): string => {
+    if (/^\d+$/.test(String(product.id))) {
+      return product.id;
+    }
+    const sorted = [...products].sort(
+      (a, b) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()
+    );
+    const index = sorted.findIndex((item) => item.id === product.id);
+    return index >= 0 ? String(index + 1) : '1';
+  };
+
   const loadProducts = async () => {
     setIsLoading(true);
     try {
+      // Auto-sync any products trapped in this browser's local storage to Supabase Cloud Database
+      const synced = await productService.syncLocalProductsToSupabase();
+      if (synced > 0) {
+        onNotify(`Successfully synced ${synced} product(s) to Supabase Cloud Database!`, 'success');
+      }
+
       const [data, counts] = await Promise.all([
         productService.getProducts({}, true), // isAdmin = true
         analyticsService.getAffiliateClickCounts(),
@@ -52,6 +71,23 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
       setClickCounts(counts);
     } catch (err: any) {
       onNotify('Failed to fetch products: ' + err.message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setIsLoading(true);
+    try {
+      const synced = await productService.syncLocalProductsToSupabase();
+      if (synced > 0) {
+        onNotify(`Successfully synced ${synced} product(s) to Supabase Cloud Database!`, 'success');
+      } else {
+        onNotify('All products are synced and live in the Cloud Database!', 'success');
+      }
+      await loadProducts();
+    } catch (err: any) {
+      onNotify('Sync error: ' + err.message, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +175,17 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             Add new products, update details, monitor Meesho affiliate clicks, and manage catalog items.
           </p>
         </div>
-        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleManualSync}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-semibold transition-colors shrink-0 cursor-pointer touch-manipulation"
+            title="Upload any products in this browser to Supabase Cloud Database"
+          >
+            <CloudUpload className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Sync to Cloud</span>
+          </button>
           <button
             type="button"
             onClick={loadProducts}
@@ -223,24 +269,29 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   <tr key={p.id} className="hover:bg-nexora-warmWhite/40 transition-colors">
                     {/* 1. Product ID */}
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5">
-                        <span 
-                          className="font-mono text-xs font-bold text-nexora-charcoal bg-nexora-warmWhite px-2.5 py-1 rounded border border-nexora-border select-all min-w-[32px] text-center"
-                          title={`Product #${p.id}`}
-                        >
-                          #{p.id}
-                        </span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(String(p.id));
-                            onNotify(`Product ID #${p.id} copied to clipboard`, 'success');
-                          }}
-                          className="p-1 text-neutral-400 hover:text-nexora-charcoal hover:bg-nexora-beige rounded transition-colors"
-                          title="Copy Product ID"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {(() => {
+                        const displayId = getProductDisplayId(p);
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <span 
+                              className="font-mono text-xs font-bold text-nexora-charcoal bg-nexora-warmWhite px-2.5 py-1 rounded border border-nexora-border select-all min-w-[32px] text-center"
+                              title={`Product #${displayId}`}
+                            >
+                              #{displayId}
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(displayId);
+                                onNotify(`Product ID #${displayId} copied to clipboard`, 'success');
+                              }}
+                              className="p-1 text-neutral-400 hover:text-nexora-charcoal hover:bg-nexora-beige rounded transition-colors cursor-pointer"
+                              title="Copy Product ID"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* 2. Product Name */}

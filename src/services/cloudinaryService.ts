@@ -22,8 +22,8 @@ export const cloudinaryService = {
       throw new Error(validation.error || 'Invalid file');
     }
 
-    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-    const unsignedPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'ufn963cd';
+    const unsignedPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'nexora_products';
 
     // 1. If Supabase is configured and edge function is deployed, request signed upload params
     if (isSupabaseConfigured() && !unsignedPreset) {

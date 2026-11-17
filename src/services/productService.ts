@@ -117,10 +117,23 @@ export const productService = {
 
         const { data, error } = await query;
         if (!error && data) {
-          return data.map((item) => ({
-            ...item,
-            images: Array.isArray(item.images) ? item.images : JSON.parse(item.images || '[]'),
-          }));
+          // If Supabase returned items, return them formatted
+          if (data.length > 0) {
+            return data.map((item) => ({
+              ...item,
+              images: Array.isArray(item.images) ? item.images : JSON.parse(item.images || '[]'),
+            }));
+          }
+
+          // If Supabase returned 0 items, check if local browser storage has items from previous offline adds
+          const localItems = getStoredProducts();
+          if (localItems.length > 0) {
+            // Trigger automatic sync to Supabase in the background
+            this.syncLocalProductsToSupabase().catch(console.error);
+            return localItems.filter((p) => isAdmin || p.active);
+          }
+
+          return [];
         }
         console.warn('Supabase fetch failed, falling back to local dataset:', error);
       } catch (err) {
@@ -326,5 +339,64 @@ export const productService = {
     const filtered = localList.filter((p) => p.id !== id);
     saveStoredProducts(filtered);
     return true;
+  },
+
+  /**
+   * Automatically migrate and synchronize products from local browser storage to Supabase.
+   * This ensures that any products added offline or before database setup are pushed to the cloud,
+   * so every visitor (from Instagram, mobile, laptop) can immediately see them.
+   */
+  async syncLocalProductsToSupabase(): Promise<number> {
+    if (!isSupabaseConfigured()) return 0;
+
+    try {
+      // 1. Get current products in Supabase
+      const { data: dbProducts, error } = await supabase.from('products').select('*');
+      if (error) {
+        console.warn('Could not query Supabase for sync:', error);
+        return 0;
+      }
+
+      // 2. Get local products
+      const localProducts = getStoredProducts();
+      if (!localProducts || localProducts.length === 0) return 0;
+
+      const existingNames = new Set((dbProducts || []).map((p) => p.name.trim().toLowerCase()));
+
+      let syncedCount = 0;
+      for (const localP of localProducts) {
+        // If not already in Supabase by name
+        if (!existingNames.has(localP.name.trim().toLowerCase())) {
+          const { data: inserted, error: insertErr } = await supabase.from('products').insert({
+            name: localP.name,
+            description: localP.description || '',
+            price: localP.price || 0,
+            original_price: localP.original_price || null,
+            category: localP.category,
+            gender: localP.gender,
+            images: localP.images,
+            affiliate_url: localP.affiliate_url,
+            featured: Boolean(localP.featured),
+            trending: Boolean(localP.trending),
+            active: localP.active !== false,
+          }).select().single();
+
+          if (!insertErr && inserted) {
+            existingNames.add(localP.name.trim().toLowerCase());
+            syncedCount++;
+          } else {
+            console.warn('Failed to sync product to Supabase:', insertErr);
+          }
+        }
+      }
+
+      if (syncedCount > 0) {
+        console.log(`Successfully synced ${syncedCount} products to Supabase cloud database!`);
+      }
+      return syncedCount;
+    } catch (err) {
+      console.error('Error during auto-sync to Supabase:', err);
+      return 0;
+    }
   },
 };

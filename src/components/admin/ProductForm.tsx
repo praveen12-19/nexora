@@ -126,7 +126,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               {product ? 'Edit Product' : 'Add New Product'}
             </h3>
             <p className="text-xs text-white/70">
-              Configure product details, Cloudinary images, and Meesho affiliate link.
+              Configure product details, images, and Meesho affiliate link.
             </p>
           </div>
           <button
@@ -237,7 +237,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             <div className="flex flex-col sm:flex-row gap-2">
               <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 bg-nexora-warmWhite border-2 border-dashed border-nexora-border rounded-lg hover:border-nexora-primary transition-colors text-xs font-semibold text-nexora-charcoal">
                 <Upload className="w-4 h-4" />
-                <span>{uploadingImage ? 'Uploading to Cloudinary...' : 'Upload Image Files'}</span>
+                <span>{uploadingImage ? 'Uploading Image...' : 'Upload Image Files'}</span>
                 <input
                   type="file"
                   multiple
