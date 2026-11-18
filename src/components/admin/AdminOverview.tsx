@@ -8,7 +8,8 @@ import {
   PlusCircle, 
   ArrowRight,
   MousePointerClick,
-  Clock
+  Clock,
+  RotateCcw
 } from 'lucide-react';
 import { Product } from '../../types/product';
 import { AnalyticsSummary } from '../../types/analytics';
@@ -41,6 +42,20 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
       console.error('Failed to load admin overview data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleClearTodayCounts = () => {
+    if (window.confirm("Are you sure you want to clear today's activity counts? All visits, visitors, views, and link clicks will reset to 0.")) {
+      analyticsService.clearTodayCounts();
+      setSummary({
+        totalVisits: 0,
+        uniqueVisitors: 0,
+        totalProductViews: 0,
+        totalProductClicks: 0,
+        totalAffiliateClicks: 0,
+        clickThroughRate: 0,
+      });
     }
   };
 
@@ -89,16 +104,22 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
         </div>
       </div>
 
-      {/* 24-Hour Daily Live Metrics (Product count cleared; Resets at EOD / Midnight) */}
+      {/* Today's Live Metrics */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-nexora-charcoal">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-nexora-charcoal">
             <Clock className="w-3.5 h-3.5 text-amber-600" />
             <span>Today's Activity</span>
-            <span className="text-[10px] font-normal text-nexora-muted bg-nexora-warmWhite px-2 py-0.5 rounded-full border border-nexora-border/70">
-              Resets every 24h at midnight (EOD)
-            </span>
           </div>
+          <button
+            type="button"
+            onClick={handleClearTodayCounts}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-nexora-muted hover:text-red-600 bg-white hover:bg-red-50 border border-nexora-border/80 hover:border-red-200 rounded-lg shadow-2xs transition-all cursor-pointer"
+            title="Clear today's visit, view, and link click counts to 0"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Clear Count</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 md:gap-4">
@@ -111,9 +132,8 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
             <div className="text-2xl font-bold text-nexora-charcoal">
               {isLoading ? '...' : summary?.totalVisits ?? 0}
             </div>
-            <div className="text-[10px] text-nexora-muted mt-1 flex items-center justify-between">
-              <span>Sessions today</span>
-              <span className="text-[9px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">24h EOD</span>
+            <div className="text-[10px] text-nexora-muted mt-1">
+              Sessions today
             </div>
           </div>
 
@@ -126,9 +146,8 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
             <div className="text-2xl font-bold text-nexora-charcoal">
               {isLoading ? '...' : summary?.uniqueVisitors ?? 0}
             </div>
-            <div className="text-[10px] text-nexora-muted mt-1 flex items-center justify-between">
-              <span>Devices today</span>
-              <span className="text-[9px] font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">24h EOD</span>
+            <div className="text-[10px] text-nexora-muted mt-1">
+              Devices today
             </div>
           </div>
 
@@ -141,9 +160,8 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
             <div className="text-2xl font-bold text-nexora-charcoal">
               {isLoading ? '...' : summary?.totalProductViews ?? 0}
             </div>
-            <div className="text-[10px] text-nexora-muted mt-1 flex items-center justify-between">
-              <span>Detail hits today</span>
-              <span className="text-[9px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">24h EOD</span>
+            <div className="text-[10px] text-nexora-muted mt-1">
+              Detail hits today
             </div>
           </div>
 
@@ -156,9 +174,8 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
             <div className="text-2xl font-bold text-pink-700">
               {isLoading ? '...' : summary?.totalAffiliateClicks ?? 0}
             </div>
-            <div className="text-[10px] text-pink-600 mt-1 flex items-center justify-between">
-              <span>Affiliate clicks today</span>
-              <span className="text-[9px] font-bold text-pink-700 bg-pink-100 px-1.5 py-0.5 rounded">24h EOD</span>
+            <div className="text-[10px] text-pink-600 mt-1">
+              Affiliate clicks today
             </div>
           </div>
         </div>

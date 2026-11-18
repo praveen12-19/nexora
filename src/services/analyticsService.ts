@@ -12,6 +12,7 @@ import { INITIAL_PRODUCTS } from '../data/initialProducts';
 
 const LOCAL_ANALYTICS_EVENTS_KEY = 'nexora_analytics_events';
 const LOCAL_CLICK_COUNTS_KEY = 'nexora_affiliate_clicks';
+const CLEARED_AT_KEY = 'nexora_analytics_cleared_at';
 const ADMIN_SESSION_KEY = 'nexora_admin_user';
 
 // Check if currently acting as admin to exclude from analytics
@@ -21,6 +22,14 @@ function isAdminActive(): boolean {
   } catch (err) {
     return false;
   }
+}
+
+function getClearedAtTime(): number {
+  try {
+    const raw = localStorage.getItem(CLEARED_AT_KEY);
+    if (raw) return new Date(raw).getTime();
+  } catch {}
+  return 0;
 }
 
 function getStoredClickCounts(): Record<string, number> {
@@ -175,12 +184,37 @@ export const analyticsService = {
   },
 
   /**
+   * Clear today's live activity counts (visits, visitors, views, and clicks) to 0.
+   * Useful for administrators analyzing traffic over custom time periods.
+   */
+  clearTodayCounts(): void {
+    try {
+      localStorage.setItem(CLEARED_AT_KEY, new Date().toISOString());
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nexora_affiliate_click_updated'));
+      }
+    } catch (err) {
+      console.warn('Failed to clear today counts:', err);
+    }
+  },
+
+  /**
    * Get aggregated summary for the Admin Analytics Dashboard.
-   * When filter === 'today', strictly computes 24-hr metrics that reset at EOD (midnight).
+   * When filter === 'today', strictly computes 24-hr metrics that reset at EOD (midnight),
+   * and respects manual clear timestamps.
    */
   async getSummary(filter: AnalyticsDateFilter = 'all'): Promise<AnalyticsSummary> {
-    const filterStartDate = getFilterDate(filter).toISOString();
-    const filterTime = getFilterDate(filter).getTime();
+    const baseTime = getFilterDate(filter).getTime();
+    let filterTime = baseTime;
+
+    // For 'today', if the user clicked "Clear Count" today, only count events after that timestamp
+    if (filter === 'today') {
+      const clearedAt = getClearedAtTime();
+      if (clearedAt > baseTime) {
+        filterTime = clearedAt;
+      }
+    }
+    const filterStartDate = new Date(filterTime).toISOString();
 
     // 1. Try Supabase aggregation RPC or direct query
     if (isSupabaseConfigured()) {
