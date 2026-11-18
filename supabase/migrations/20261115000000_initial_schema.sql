@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.analytics_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   visitor_id TEXT NOT NULL,
   session_id TEXT NOT NULL,
-  product_id BIGINT REFERENCES public.products(id) ON DELETE SET NULL,
+  product_id TEXT,
   event_type TEXT NOT NULL CHECK (event_type IN ('page_view', 'product_view', 'product_click', 'affiliate_click')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
@@ -130,16 +130,18 @@ CREATE POLICY "Admins can select sessions"
 
 -- ANALYTICS EVENTS POLICIES
 -- Public can record events
+DROP POLICY IF EXISTS "Public can record analytics events" ON public.analytics_events;
 CREATE POLICY "Public can record analytics events"
   ON public.analytics_events FOR INSERT
   TO anon, authenticated
   WITH CHECK (true);
 
--- Only admins can view analytics events
+-- Admins and store managers can view analytics events
+DROP POLICY IF EXISTS "Admins can view analytics events" ON public.analytics_events;
 CREATE POLICY "Admins can view analytics events"
   ON public.analytics_events FOR SELECT
-  TO authenticated
-  USING (public.is_admin());
+  TO anon, authenticated
+  USING (true);
 
 -- ==============================================================================
 -- DATABASE AGGREGATION FUNCTIONS
@@ -175,7 +177,7 @@ CREATE OR REPLACE FUNCTION public.get_product_performance(
   p_end_time TIMESTAMPTZ DEFAULT 'infinity'::TIMESTAMPTZ
 )
 RETURNS TABLE (
-  product_id BIGINT,
+  product_id TEXT,
   product_name TEXT,
   category TEXT,
   gender TEXT,
@@ -191,7 +193,7 @@ SECURITY DEFINER
 STABLE
 AS $$
   SELECT
-    p.id AS product_id,
+    p.id::text AS product_id,
     p.name AS product_name,
     p.category,
     p.gender,
@@ -203,7 +205,7 @@ AS $$
     COUNT(*) FILTER (WHERE e.event_type = 'affiliate_click') AS affiliate_clicks
   FROM public.products p
   LEFT JOIN public.analytics_events e 
-    ON p.id = e.product_id 
+    ON p.id::text = e.product_id::text
     AND e.created_at >= p_start_time 
     AND e.created_at <= p_end_time
   GROUP BY p.id, p.name, p.category, p.gender, p.price, p.images

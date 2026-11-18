@@ -264,7 +264,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             </thead>
             <tbody className="divide-y divide-nexora-border/50">
               {filteredProducts.map((p) => {
-                const count = clickCounts[p.id] || 0;
+                const count = clickCounts[p.id] || clickCounts[getProductDisplayId(p)] || 0;
                 return (
                   <tr key={p.id} className="hover:bg-nexora-warmWhite/40 transition-colors">
                     {/* 1. Product ID */}

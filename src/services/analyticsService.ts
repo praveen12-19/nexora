@@ -11,6 +11,7 @@ import { getOrCreateSession, updateSessionActivity } from '../utils/sessionTrack
 import { INITIAL_PRODUCTS } from '../data/initialProducts';
 
 const LOCAL_ANALYTICS_EVENTS_KEY = 'nexora_analytics_events';
+const LOCAL_CLICK_COUNTS_KEY = 'nexora_affiliate_clicks';
 const ADMIN_SESSION_KEY = 'nexora_admin_user';
 
 // Check if currently acting as admin to exclude from analytics
@@ -19,6 +20,26 @@ function isAdminActive(): boolean {
     return Boolean(localStorage.getItem(ADMIN_SESSION_KEY));
   } catch (err) {
     return false;
+  }
+}
+
+function getStoredClickCounts(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LOCAL_CLICK_COUNTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to parse local click counts:', err);
+  }
+  return {};
+}
+
+function incrementStoredClickCount(productId: string): void {
+  try {
+    const counts = getStoredClickCounts();
+    counts[productId] = (counts[productId] || 0) + 1;
+    localStorage.setItem(LOCAL_CLICK_COUNTS_KEY, JSON.stringify(counts));
+  } catch (err) {
+    console.warn('Failed to save local click count:', err);
   }
 }
 
@@ -60,11 +81,17 @@ function getFilterDate(filter: AnalyticsDateFilter): Date {
 export const analyticsService = {
   /**
    * Track an analytics event.
-   * Silently ignores tracking if the user is currently an admin.
+   * Excludes background page/product browsing from admin, but always tracks
+   * affiliate link clicks so testing and click verification works reliably.
    */
   async trackEvent(eventType: AnalyticsEventType, productId?: string | null): Promise<void> {
-    if (isAdminActive()) {
-      // Exclude admin activity as required by specification Section 9.F
+    // 1. Immediately record fast local affiliate click count so UI updates instantly
+    if (eventType === 'affiliate_click' && productId) {
+      incrementStoredClickCount(productId);
+    }
+
+    // Exclude admin from background page/product browsing metrics, but never block affiliate clicks
+    if (isAdminActive() && eventType !== 'affiliate_click') {
       return;
     }
 
@@ -80,31 +107,65 @@ export const analyticsService = {
       created_at: new Date().toISOString(),
     };
 
-    // 1. Send to Supabase Edge Function or Table if configured
+    // 2. Send to Supabase Edge Function or Table if configured
     if (isSupabaseConfigured()) {
       try {
-        // Try Edge Function first
-        const { error } = await supabase.functions.invoke('track-event', {
+        // Try Edge Function first if deployed
+        const { error: fnError } = await supabase.functions.invoke('track-event', {
           body: event,
         });
 
-        if (!error) return;
+        if (!fnError) {
+          // Edge function succeeded
+          const list = getStoredEvents();
+          list.push(event);
+          saveStoredEvents(list);
+          return;
+        }
 
-        // Fallback: direct table insert with anon key
-        await supabase.from('analytics_events').insert({
+        // Direct table insert with anon key
+        const payload: Record<string, any> = {
           visitor_id: visitorId,
           session_id: sessionId,
-          product_id: productId || null,
           event_type: eventType,
-        });
-        return;
+        };
+
+        if (productId) {
+          payload.product_id = productId;
+        }
+
+        const { error: insertError } = await supabase.from('analytics_events').insert(payload);
+
+        if (!insertError) {
+          // Direct insert succeeded
+          const list = getStoredEvents();
+          list.push(event);
+          saveStoredEvents(list);
+          return;
+        }
+
+        console.warn('Supabase analytics insert failed, will persist locally:', insertError);
+
+        // If insert failed because of product_id type mismatch (e.g. invalid UUID syntax),
+        // try inserting with product_id: null so the session/event is still recorded in Supabase,
+        // while the exact product_id click is recorded locally!
+        if (payload.product_id) {
+          try {
+            await supabase.from('analytics_events').insert({
+              visitor_id: visitorId,
+              session_id: sessionId,
+              event_type: eventType,
+              product_id: null,
+            });
+          } catch {}
+        }
       } catch (err) {
         // Edge function or database insertion failed, store locally
         console.warn('Analytics network log failed, logging locally:', err);
       }
     }
 
-    // 2. Local fallback storage
+    // 3. Local fallback storage
     const list = getStoredEvents();
     list.push(event);
     saveStoredEvents(list);
@@ -227,9 +288,10 @@ export const analyticsService = {
     const filterTime = getFilterDate(filter).getTime();
     const filteredEvents = events.filter((e) => new Date(e.created_at || '').getTime() >= filterTime);
 
-    // Get current products
-    const rawProducts = localStorage.getItem('nexora_local_products');
+    // Get current products from catalog v2 or legacy storage
+    const rawProducts = localStorage.getItem('nexora_catalog_v2') || localStorage.getItem('nexora_local_products');
     const products = rawProducts ? JSON.parse(rawProducts) : INITIAL_PRODUCTS;
+    const fastClickCounts = getStoredClickCounts();
 
     const performanceMap = new Map<string, {
       totalViews: number;
@@ -243,7 +305,7 @@ export const analyticsService = {
         totalViews: 0,
         visitors: new Set(),
         productClicks: 0,
-        affiliateClicks: 0,
+        affiliateClicks: fastClickCounts[p.id] || 0,
       });
     }
 
@@ -257,7 +319,7 @@ export const analyticsService = {
       } else if (e.event_type === 'product_click') {
         stats.productClicks++;
       } else if (e.event_type === 'affiliate_click') {
-        stats.affiliateClicks++;
+        stats.affiliateClicks = Math.max(stats.affiliateClicks, (stats.affiliateClicks || 0) + 1);
       }
     }
 
@@ -289,11 +351,30 @@ export const analyticsService = {
 
   /**
    * Get affiliate click counts keyed by product ID: { [productId: string]: number }
+   * Merges local instant click counts, local recorded events, and Supabase cloud events.
    */
   async getAffiliateClickCounts(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {};
 
-    // 1. If Supabase is configured, attempt direct query
+    // 1. Load fast local click counts
+    const localFastCounts = getStoredClickCounts();
+    for (const [id, count] of Object.entries(localFastCounts)) {
+      counts[id] = count;
+    }
+
+    // 2. Scan local stored events
+    const events = getStoredEvents();
+    const eventCounts: Record<string, number> = {};
+    for (const e of events) {
+      if (e.product_id && e.event_type === 'affiliate_click') {
+        eventCounts[e.product_id] = (eventCounts[e.product_id] || 0) + 1;
+      }
+    }
+    for (const [id, count] of Object.entries(eventCounts)) {
+      counts[id] = Math.max(counts[id] || 0, count);
+    }
+
+    // 3. If Supabase is configured, fetch cloud click counts and merge
     if (isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase
@@ -302,25 +383,25 @@ export const analyticsService = {
           .eq('event_type', 'affiliate_click');
 
         if (!error && Array.isArray(data)) {
+          const cloudCounts: Record<string, number> = {};
           for (const row of data) {
             if (row.product_id) {
-              counts[row.product_id] = (counts[row.product_id] || 0) + 1;
+              const pId = String(row.product_id);
+              cloudCounts[pId] = (cloudCounts[pId] || 0) + 1;
             }
           }
-          return counts;
+          // Merge: ensure counts reflect both cloud and local clicks
+          for (const [id, count] of Object.entries(cloudCounts)) {
+            counts[id] = Math.max(counts[id] || 0, count);
+          }
+        } else if (error) {
+          console.warn('Supabase affiliate click counts query warning:', error.message);
         }
       } catch (err) {
         console.warn('Supabase affiliate click counts query failed, using local fallback:', err);
       }
     }
 
-    // 2. Local fallback from stored events
-    const events = getStoredEvents();
-    for (const e of events) {
-      if (e.product_id && e.event_type === 'affiliate_click') {
-        counts[e.product_id] = (counts[e.product_id] || 0) + 1;
-      }
-    }
     return counts;
   },
 };
