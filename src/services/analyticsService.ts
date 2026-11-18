@@ -38,6 +38,9 @@ function incrementStoredClickCount(productId: string): void {
     const counts = getStoredClickCounts();
     counts[productId] = (counts[productId] || 0) + 1;
     localStorage.setItem(LOCAL_CLICK_COUNTS_KEY, JSON.stringify(counts));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nexora_affiliate_click_updated'));
+    }
   } catch (err) {
     console.warn('Failed to save local click count:', err);
   }
@@ -173,19 +176,22 @@ export const analyticsService = {
 
   /**
    * Get aggregated summary for the Admin Analytics Dashboard.
+   * When filter === 'today', strictly computes 24-hr metrics that reset at EOD (midnight).
    */
   async getSummary(filter: AnalyticsDateFilter = 'all'): Promise<AnalyticsSummary> {
     const filterStartDate = getFilterDate(filter).toISOString();
+    const filterTime = getFilterDate(filter).getTime();
 
+    // 1. Try Supabase aggregation RPC or direct query
     if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase.rpc('get_analytics_summary', {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_analytics_summary', {
           p_start_time: filterStartDate,
           p_end_time: new Date().toISOString(),
         });
 
-        if (!error && data && data.length > 0) {
-          const row = data[0];
+        if (!rpcError && rpcData && rpcData.length > 0) {
+          const row = rpcData[0];
           const totalVisits = Number(row.total_visits || 0);
           const uniqueVisitors = Number(row.unique_visitors || 0);
           const totalProductViews = Number(row.total_product_views || 0);
@@ -204,14 +210,57 @@ export const analyticsService = {
             clickThroughRate,
           };
         }
+
+        // Direct table query fallback if RPC is not installed in database
+        const { data: tableData, error: tableError } = await supabase
+          .from('analytics_events')
+          .select('visitor_id, session_id, event_type, created_at')
+          .gte('created_at', filterStartDate);
+
+        if (!tableError && Array.isArray(tableData)) {
+          const visitorSet = new Set<string>();
+          const sessionSet = new Set<string>();
+          let pViews = 0;
+          let pClicks = 0;
+          let aClicks = 0;
+
+          for (const row of tableData) {
+            if (row.visitor_id) visitorSet.add(row.visitor_id);
+            if (row.session_id) sessionSet.add(row.session_id);
+            if (row.event_type === 'product_view') pViews++;
+            if (row.event_type === 'product_click') pClicks++;
+            if (row.event_type === 'affiliate_click') aClicks++;
+          }
+
+          // Merge any events saved locally for this timeframe
+          const localEvents = getStoredEvents().filter(
+            (e) => new Date(e.created_at || '').getTime() >= filterTime
+          );
+          for (const e of localEvents) {
+            if (e.visitor_id) visitorSet.add(e.visitor_id);
+            if (e.session_id) sessionSet.add(e.session_id);
+            if (e.event_type === 'product_view') pViews++;
+            if (e.event_type === 'product_click') pClicks++;
+            if (e.event_type === 'affiliate_click') aClicks++;
+          }
+
+          const ctr = pViews > 0 ? Math.round((aClicks / pViews) * 1000) / 10 : 0;
+          return {
+            totalVisits: sessionSet.size,
+            uniqueVisitors: visitorSet.size,
+            totalProductViews: pViews,
+            totalProductClicks: pClicks,
+            totalAffiliateClicks: aClicks,
+            clickThroughRate: ctr,
+          };
+        }
       } catch (err) {
-        console.warn('Supabase summary RPC failed, computing from local:', err);
+        console.warn('Supabase summary failed, computing from local:', err);
       }
     }
 
-    // Local computation
+    // 2. Local computation fallback
     const events = getStoredEvents();
-    const filterTime = getFilterDate(filter).getTime();
     const filteredEvents = events.filter((e) => new Date(e.created_at || '').getTime() >= filterTime);
 
     const uniqueVisitorSet = new Set<string>();

@@ -95,6 +95,20 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
 
   useEffect(() => {
     loadProducts();
+
+    // Auto-refresh click counts when tab regains focus or when affiliate click occurs
+    const handleUpdate = () => {
+      analyticsService.getAffiliateClickCounts().then((counts) => {
+        setClickCounts(counts);
+      }).catch(() => {});
+    };
+
+    window.addEventListener('focus', handleUpdate);
+    window.addEventListener('nexora_affiliate_click_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('focus', handleUpdate);
+      window.removeEventListener('nexora_affiliate_click_updated', handleUpdate);
+    };
   }, []);
 
   const handleOpenAdd = () => {
@@ -343,8 +357,15 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                             target="_blank"
                             rel="noopener noreferrer"
                             className="ml-1 text-pink-400 hover:text-pink-600 transition-colors"
-                            title="Open Meesho link in new tab"
-                            onClick={(e) => e.stopPropagation()}
+                            title="Open Meesho link in new tab (+1 click)"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              analyticsService.trackEvent('affiliate_click', p.id).catch(() => {});
+                              setClickCounts((prev) => ({
+                                ...prev,
+                                [p.id]: (prev[p.id] || 0) + 1,
+                              }));
+                            }}
                           >
                             <ExternalLink className="w-3 h-3" />
                           </a>

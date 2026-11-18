@@ -6,8 +6,9 @@ import {
   Users, 
   TrendingUp, 
   PlusCircle, 
-  CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  MousePointerClick,
+  Clock
 } from 'lucide-react';
 import { Product } from '../../types/product';
 import { AnalyticsSummary } from '../../types/analytics';
@@ -27,28 +28,34 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const [prodList, analyticsSummary] = await Promise.all([
-          productService.getProducts({}, true),
-          analyticsService.getSummary('all'),
-        ]);
-        setProducts(prodList);
-        setSummary(analyticsSummary);
-      } catch (err) {
-        console.error('Failed to load admin overview data:', err);
-      } finally {
-        setIsLoading(false);
-      }
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [prodList, analyticsSummary] = await Promise.all([
+        productService.getProducts({}, true),
+        analyticsService.getSummary('today'), // Strictly today's 24-hr metrics (EOD reset)
+      ]);
+      setProducts(prodList);
+      setSummary(analyticsSummary);
+    } catch (err) {
+      console.error('Failed to load admin overview data:', err);
+    } finally {
+      setIsLoading(false);
     }
-    loadData();
-  }, []);
+  };
 
-  const totalProducts = products.length;
-  const activeProducts = products.filter((p) => p.active).length;
-  const featuredProducts = products.filter((p) => p.featured).length;
+  useEffect(() => {
+    loadData();
+
+    // Auto-refresh when tab regains focus or when an affiliate click is logged
+    const handleFocus = () => loadData();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('nexora_affiliate_click_updated', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('nexora_affiliate_click_updated', handleFocus);
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -82,75 +89,77 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
         </div>
       </div>
 
-      {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 md:gap-4">
-        {/* Total Products */}
-        <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-nexora-muted mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Total Products</span>
-            <ShoppingBag className="w-4 h-4 text-nexora-charcoal" />
-          </div>
-          <div className="text-2xl font-bold text-nexora-charcoal">
-            {isLoading ? '...' : totalProducts}
-          </div>
-          <div className="text-[10px] text-nexora-muted mt-1">
-            {featuredProducts} featured
+      {/* 24-Hour Daily Live Metrics (Product count cleared; Resets at EOD / Midnight) */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-nexora-charcoal">
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
+            <span>Today's Activity</span>
+            <span className="text-[10px] font-normal text-nexora-muted bg-nexora-warmWhite px-2 py-0.5 rounded-full border border-nexora-border/70">
+              Resets every 24h at midnight (EOD)
+            </span>
           </div>
         </div>
 
-        {/* Active Products */}
-        <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-emerald-600 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-nexora-muted">Active Live</span>
-            <CheckCircle2 className="w-4 h-4" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 md:gap-4">
+          {/* 1. Today's Total Visits */}
+          <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between text-nexora-muted mb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Today's Visits</span>
+              <TrendingUp className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="text-2xl font-bold text-nexora-charcoal">
+              {isLoading ? '...' : summary?.totalVisits ?? 0}
+            </div>
+            <div className="text-[10px] text-nexora-muted mt-1 flex items-center justify-between">
+              <span>Sessions today</span>
+              <span className="text-[9px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">24h EOD</span>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-emerald-700">
-            {isLoading ? '...' : activeProducts}
-          </div>
-          <div className="text-[10px] text-emerald-600 mt-1">
-            Visible on store
-          </div>
-        </div>
 
-        {/* Total Visits */}
-        <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-nexora-muted mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Total Visits</span>
-            <TrendingUp className="w-4 h-4 text-blue-600" />
+          {/* 2. Today's Unique Visitors */}
+          <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between text-nexora-muted mb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Unique Visitors</span>
+              <Users className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="text-2xl font-bold text-nexora-charcoal">
+              {isLoading ? '...' : summary?.uniqueVisitors ?? 0}
+            </div>
+            <div className="text-[10px] text-nexora-muted mt-1 flex items-center justify-between">
+              <span>Devices today</span>
+              <span className="text-[9px] font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">24h EOD</span>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-nexora-charcoal">
-            {isLoading ? '...' : summary?.totalVisits ?? 0}
-          </div>
-          <div className="text-[10px] text-nexora-muted mt-1">
-            Sessions tracked
-          </div>
-        </div>
 
-        {/* Unique Visitors */}
-        <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-nexora-muted mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Unique Visitors</span>
-            <Users className="w-4 h-4 text-indigo-600" />
+          {/* 3. Today's Product Views */}
+          <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between text-nexora-muted mb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Product Views</span>
+              <Eye className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-2xl font-bold text-nexora-charcoal">
+              {isLoading ? '...' : summary?.totalProductViews ?? 0}
+            </div>
+            <div className="text-[10px] text-nexora-muted mt-1 flex items-center justify-between">
+              <span>Detail hits today</span>
+              <span className="text-[9px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">24h EOD</span>
+            </div>
           </div>
-          <div className="text-2xl font-bold text-nexora-charcoal">
-            {isLoading ? '...' : summary?.uniqueVisitors ?? 0}
-          </div>
-          <div className="text-[10px] text-nexora-muted mt-1">
-            Anonymous devices
-          </div>
-        </div>
 
-        {/* Product Views */}
-        <div className="bg-white p-4 rounded-xl border border-nexora-border/70 shadow-sm">
-          <div className="flex items-center justify-between text-nexora-muted mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Product Views</span>
-            <Eye className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="text-2xl font-bold text-nexora-charcoal">
-            {isLoading ? '...' : summary?.totalProductViews ?? 0}
-          </div>
-          <div className="text-[10px] text-nexora-muted mt-1">
-            Product detail hits
+          {/* 4. Today's Link Clicks (Affiliate Outbound) */}
+          <div className="bg-white p-4 rounded-xl border border-pink-200/90 shadow-sm relative overflow-hidden bg-gradient-to-br from-white to-pink-50/40">
+            <div className="flex items-center justify-between text-pink-700 mb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Today's Link Clicks</span>
+              <MousePointerClick className="w-4 h-4 text-pink-600" />
+            </div>
+            <div className="text-2xl font-bold text-pink-700">
+              {isLoading ? '...' : summary?.totalAffiliateClicks ?? 0}
+            </div>
+            <div className="text-[10px] text-pink-600 mt-1 flex items-center justify-between">
+              <span>Affiliate clicks today</span>
+              <span className="text-[9px] font-bold text-pink-700 bg-pink-100 px-1.5 py-0.5 rounded">24h EOD</span>
+            </div>
           </div>
         </div>
       </div>
@@ -210,6 +219,9 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-pink-600 hover:text-pink-700 flex items-center gap-1 font-semibold"
+                      onClick={() => {
+                        analyticsService.trackEvent('affiliate_click', p.id).catch(() => {});
+                      }}
                     >
                       <span>Affiliate Link</span>
                       <ExternalLink className="w-3 h-3" />
