@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { AdminUser, AdminAuthState } from '../types/admin';
+import { analyticsService } from '../services/analyticsService';
 
 const ADMIN_STORAGE_KEY = 'nexora_admin_user';
 
@@ -19,6 +20,7 @@ export function useAdminAuth() {
       try {
         const stored = localStorage.getItem(ADMIN_STORAGE_KEY);
         if (stored) {
+          localStorage.setItem('nexora_admin_device', 'true');
           const parsed: AdminUser = JSON.parse(stored);
           setState({
             user: parsed,
@@ -91,6 +93,7 @@ export function useAdminAuth() {
         created_at: new Date().toISOString(),
       };
       localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(adminUser));
+      analyticsService.purgeCurrentSessionFromAnalytics().catch(() => {});
       setState({
         user: adminUser,
         isAuthenticated: true,
@@ -123,6 +126,7 @@ export function useAdminAuth() {
               created_at: adminData.created_at,
             };
             localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(adminUser));
+            analyticsService.purgeCurrentSessionFromAnalytics().catch(() => {});
             setState({
               user: adminUser,
               isAuthenticated: true,

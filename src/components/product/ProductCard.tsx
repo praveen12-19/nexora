@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ExternalLink, X, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
 import { Product } from '../../types/product';
 import { formatCurrency, calculateDiscount } from '../../utils/currency';
@@ -23,8 +23,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const primaryImage = images[0];
   const hoverImage = images[1] || primaryImage;
 
+  const lastClickRef = useRef<number>(0);
+
   const handleAffiliateClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    const now = Date.now();
+    if (now - lastClickRef.current < 1500) {
+      // Prevent accidental double clicks from double-incrementing within 1.5 seconds
+      return;
+    }
+    lastClickRef.current = now;
+
+    // A user clicking "View Product" has viewed the product and clicked its affiliate link
+    analyticsService.trackEvent('product_view', product.id).catch(() => {});
     analyticsService.trackEvent('affiliate_click', product.id).catch(() => {});
   };
 

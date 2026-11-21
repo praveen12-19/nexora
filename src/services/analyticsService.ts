@@ -1,10 +1,10 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { 
-  AnalyticsEvent, 
-  AnalyticsEventType, 
-  AnalyticsSummary, 
-  ProductPerformance, 
-  AnalyticsDateFilter 
+import {
+  AnalyticsEvent,
+  AnalyticsEventType,
+  AnalyticsSummary,
+  ProductPerformance,
+  AnalyticsDateFilter
 } from '../types/analytics';
 import { getVisitorId } from '../utils/visitorId';
 import { getOrCreateSession, updateSessionActivity } from '../utils/sessionTracking';
@@ -14,11 +14,15 @@ const LOCAL_ANALYTICS_EVENTS_KEY = 'nexora_analytics_events';
 const LOCAL_CLICK_COUNTS_KEY = 'nexora_affiliate_clicks';
 const CLEARED_AT_KEY = 'nexora_analytics_cleared_at';
 const ADMIN_SESSION_KEY = 'nexora_admin_user';
+const ADMIN_DEVICE_KEY = 'nexora_admin_device';
 
 // Check if currently acting as admin to exclude from analytics
-function isAdminActive(): boolean {
+export function isAdminActive(): boolean {
   try {
-    return Boolean(localStorage.getItem(ADMIN_SESSION_KEY));
+    return Boolean(
+      localStorage.getItem(ADMIN_SESSION_KEY) ||
+      localStorage.getItem(ADMIN_DEVICE_KEY)
+    );
   } catch (err) {
     return false;
   }
@@ -28,7 +32,7 @@ function getClearedAtTime(): number {
   try {
     const raw = localStorage.getItem(CLEARED_AT_KEY);
     if (raw) return new Date(raw).getTime();
-  } catch {}
+  } catch { }
   return 0;
 }
 
@@ -169,7 +173,7 @@ export const analyticsService = {
               event_type: eventType,
               product_id: null,
             });
-          } catch {}
+          } catch { }
         }
       } catch (err) {
         // Edge function or database insertion failed, store locally
@@ -198,6 +202,48 @@ export const analyticsService = {
     }
   },
 
+  isAdminActive(): boolean {
+    return isAdminActive();
+  },
+
+  /**
+   * Purges the current browser session and visitor ID from analytics events.
+   * Called immediately upon admin login to ensure the admin's initial page visit
+   * is completely removed from unique visitors and visit counts.
+   */
+  async purgeCurrentSessionFromAnalytics(): Promise<void> {
+    try {
+      localStorage.setItem(ADMIN_DEVICE_KEY, 'true');
+
+      const visitorId = getVisitorId();
+      const { sessionId } = getOrCreateSession();
+
+      // 1. Purge from local stored events
+      const events = getStoredEvents();
+      const filtered = events.filter(
+        (e) => e.visitor_id !== visitorId && e.session_id !== sessionId
+      );
+      saveStoredEvents(filtered);
+
+      // 2. Purge from Supabase if configured
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('analytics_events').delete().eq('session_id', sessionId);
+          await supabase.from('analytics_events').delete().eq('visitor_id', visitorId);
+        } catch (dbErr) {
+          console.warn('Could not purge admin session from Supabase:', dbErr);
+        }
+      }
+
+      // 3. Dispatch update event to refresh overview instantly
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nexora_affiliate_click_updated'));
+      }
+    } catch (err) {
+      console.warn('Failed to purge admin session:', err);
+    }
+  },
+
   /**
    * Get aggregated summary for the Admin Analytics Dashboard.
    * When filter === 'today', strictly computes 24-hr metrics that reset at EOD (midnight),
@@ -206,12 +252,14 @@ export const analyticsService = {
   async getSummary(filter: AnalyticsDateFilter = 'all'): Promise<AnalyticsSummary> {
     const baseTime = getFilterDate(filter).getTime();
     let filterTime = baseTime;
+    let isCleared = false;
 
     // For 'today', if the user clicked "Clear Count" today, only count events after that timestamp
     if (filter === 'today') {
       const clearedAt = getClearedAtTime();
       if (clearedAt > baseTime) {
         filterTime = clearedAt;
+        isCleared = true;
       }
     }
     const filterStartDate = new Date(filterTime).toISOString();
@@ -231,8 +279,8 @@ export const analyticsService = {
           const totalProductViews = Number(row.total_product_views || 0);
           const totalProductClicks = Number(row.total_product_clicks || 0);
           const totalAffiliateClicks = Number(row.total_affiliate_clicks || 0);
-          const clickThroughRate = totalProductViews > 0 
-            ? Math.round((totalAffiliateClicks / totalProductViews) * 1000) / 10 
+          const clickThroughRate = totalProductViews > 0
+            ? Math.round((totalAffiliateClicks / totalProductViews) * 1000) / 10
             : 0;
 
           return {
@@ -246,10 +294,17 @@ export const analyticsService = {
         }
 
         // Direct table query fallback if RPC is not installed in database
-        const { data: tableData, error: tableError } = await supabase
+        let query = supabase
           .from('analytics_events')
-          .select('visitor_id, session_id, event_type, created_at')
-          .gte('created_at', filterStartDate);
+          .select('visitor_id, session_id, event_type, created_at');
+
+        if (isCleared) {
+          query = query.gt('created_at', filterStartDate);
+        } else {
+          query = query.gte('created_at', filterStartDate);
+        }
+
+        const { data: tableData, error: tableError } = await query;
 
         if (!tableError && Array.isArray(tableData)) {
           const visitorSet = new Set<string>();
@@ -267,9 +322,10 @@ export const analyticsService = {
           }
 
           // Merge any events saved locally for this timeframe
-          const localEvents = getStoredEvents().filter(
-            (e) => new Date(e.created_at || '').getTime() >= filterTime
-          );
+          const localEvents = getStoredEvents().filter((e) => {
+            const t = new Date(e.created_at || '').getTime();
+            return isCleared ? t > filterTime : t >= filterTime;
+          });
           for (const e of localEvents) {
             if (e.visitor_id) visitorSet.add(e.visitor_id);
             if (e.session_id) sessionSet.add(e.session_id);
@@ -295,7 +351,10 @@ export const analyticsService = {
 
     // 2. Local computation fallback
     const events = getStoredEvents();
-    const filteredEvents = events.filter((e) => new Date(e.created_at || '').getTime() >= filterTime);
+    const filteredEvents = events.filter((e) => {
+      const t = new Date(e.created_at || '').getTime();
+      return isCleared ? t > filterTime : t >= filterTime;
+    });
 
     const uniqueVisitorSet = new Set<string>();
     const uniqueSessionSet = new Set<string>();
@@ -312,8 +371,8 @@ export const analyticsService = {
       if (e.event_type === 'affiliate_click') totalAffiliateClicks++;
     }
 
-    const clickThroughRate = totalProductViews > 0 
-      ? Math.round((totalAffiliateClicks / totalProductViews) * 1000) / 10 
+    const clickThroughRate = totalProductViews > 0
+      ? Math.round((totalAffiliateClicks / totalProductViews) * 1000) / 10
       : 0;
 
     return {
@@ -409,8 +468,8 @@ export const analyticsService = {
     const result: ProductPerformance[] = [];
     for (const p of products) {
       const stats = performanceMap.get(p.id)!;
-      const conversionRate = stats.totalViews > 0 
-        ? Math.round((stats.affiliateClicks / stats.totalViews) * 1000) / 10 
+      const conversionRate = stats.totalViews > 0
+        ? Math.round((stats.affiliateClicks / stats.totalViews) * 1000) / 10
         : 0;
 
       result.push({

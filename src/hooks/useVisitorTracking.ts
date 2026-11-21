@@ -7,6 +7,11 @@ export function useVisitorTracking() {
   const lastPathRef = useRef<string>('');
 
   useEffect(() => {
+    // If admin is active or device is an admin device, completely skip page view tracking
+    if (analyticsService.isAdminActive()) {
+      return;
+    }
+
     const currentPath = location.pathname + location.search;
 
     // Prevent duplicate firing on same URL

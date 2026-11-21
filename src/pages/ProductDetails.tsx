@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   ExternalLink, 
@@ -51,8 +51,15 @@ export const ProductDetails: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [id]);
 
+  const lastClickRef = useRef<number>(0);
+
   const handleAffiliateClick = () => {
     if (product) {
+      const now = Date.now();
+      if (now - lastClickRef.current < 1500) {
+        return;
+      }
+      lastClickRef.current = now;
       analyticsService.trackEvent('affiliate_click', product.id).catch(() => {});
     }
   };
